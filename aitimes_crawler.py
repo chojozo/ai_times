@@ -64,16 +64,17 @@ def crawl_aitimes():
                     # 제목 및 요약 선택자 수정
                     title_tag = li_item.select_one('h2.altlist-subject a')
                     lead_tag = li_item.select_one('p.altlist-summary')
+                    
                     if title_tag and lead_tag:
-    link_raw = title_tag['href']
-    link = link_raw if link_raw.startswith('http') else 'https://www.aitimes.com' + link_raw
+                        link_raw = title_tag['href']
+                        link = link_raw if link_raw.startswith('http') else 'https://www.aitimes.com' + link_raw
 
-    articles.append({
-        'title': title_tag.get_text(strip=True),
-        'link': link,
-        'summary': lead_tag.get_text(strip=True),
-        'date': article_date.strftime('%Y-%m-%d %H:%M')
-    })
+                        articles.append({
+                            'title': title_tag.get_text(strip=True),
+                            'link': link,
+                            'summary': lead_tag.get_text(strip=True),
+                            'date': article_date.strftime('%Y-%m-%d %H:%M')
+                        })
 
                 else:
                     print("  -> 결과: [제외] 24시간보다 오래된 기사입니다.")
