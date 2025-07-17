@@ -98,19 +98,19 @@ def send_email(articles):
     <html>
     <head>
         <style>
-            body { font-family: sans-serif; }
-            .article {
+            body {{ font-family: sans-serif; }}
+            .article {{
                 border-bottom: 1px solid #eee;
                 padding-bottom: 15px;
                 margin-bottom: 15px;
-            }
-            .article:last-child {
+            }}
+            .article:last-child {{
                 border-bottom: none;
-            }
-            h2 a { color: #0066cc; text-decoration: none; }
-            h2 a:hover { text-decoration: underline; }
-            p { color: #333; }
-            small { color: #888; }
+            }}
+            h2 a {{ color: #0066cc; text-decoration: none; }}
+            h2 a:hover {{ text-decoration: underline; }}
+            p {{ color: #333; }}
+            small {{ color: #888; }}
         </style>
     </head>
     <body>
