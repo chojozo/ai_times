@@ -1,0 +1,1 @@
+fix: Change email sending to use SMTP_SSL
