@@ -35,18 +35,28 @@ def crawl_mirakleai():
     article_blocks = soup.select('ul.latest_news_list > li.news_node')
 
     articles = []
-
     for li in article_blocks:
         a_tag = li.select_one('a.news_item')
         if not a_tag:
             continue
-
+    
         link = a_tag['href']
         if not link.startswith("http"):
             link = 'https://www.mk.co.kr' + link
+    
+        # ✔️ 제목 체크
+        title_tag = li.select_one('.txt_area .tit')
+        if not title_tag:
+            continue
+        title = title_tag.get_text(strip=True)
+    
+        # ✔️ 요약 체크
+        summary_tag = li.select_one('.txt_area .desc')
+        summary = summary_tag.get_text(strip=True) if summary_tag else ''
 
-        title = li.select_one('.txt_area .tit').get_text(strip=True)
-        summary = li.select_one('.txt_area .desc').get_text(strip=True) if li.select_one('.desc') else ''
+
+    
+   
 
         try:
             date_parts = li.select('div.time_area span')
