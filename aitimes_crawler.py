@@ -19,7 +19,9 @@ URL = 'https://www.aitimes.com/news/articleList.html?view_type=sm'
 def crawl_aitimes():
     """AITimes 기사 목록을 크롤링하고 디버깅 정보를 출력합니다."""
     try:
-        response = requests.get(URL)
+        response = requests.get(URL, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+        })
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
