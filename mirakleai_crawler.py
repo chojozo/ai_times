@@ -1,96 +1,90 @@
 # -*- coding: utf-8 -*-
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
-import pytz
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from datetime import datetime, timedelta
 import os
+import pytz
+
+# 환경 변수 (GitHub Actions 또는 로컬에서 설정 필요)
+SMTP_USER = os.environ.get('SMTP_USER')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
+RECIPIENT_EMAIL = os.environ.get('RECIPIENT_EMAIL')
+
+BASE_URL = 'https://www.mk.co.kr'
+URL = 'https://www.mk.co.kr/mirakleai'
 
 def crawl_mirakleai():
-    BASE_URL = 'https://www.mk.co.kr/mirakleai/'
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "ko,en-US;q=0.9,en;q=0.8",
-    }
-
     tz = pytz.timezone('Asia/Seoul')
     now = datetime.now(tz)
-    cutoff = now - timedelta(days=1)
+    today = now.date()
+    yesterday = today - timedelta(days=1)
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+        "Referer": URL,
+        "Connection": "keep-alive"
+    }
 
     session = requests.Session()
-    session.headers.update(HEADERS)
+    session.headers.update(headers)
+    session.get(URL, timeout=10)  # 사전 요청
 
-    res = session.get(BASE_URL, timeout=10)
-    res.raise_for_status()
-    soup = BeautifulSoup(res.text, 'html.parser')
+    resp = session.get(URL, timeout=10)
+    resp.raise_for_status()
+    soup = BeautifulSoup(resp.text, 'html.parser')
 
     articles = []
-    items = soup.select("ul#list_area li.news_node")
+    news_list = soup.select('.latest_news_list li.news_node')
 
-    for li in items:
-        try:
-            a_tag = li.select_one("a")
-            if not a_tag:
-                continue
+    for li in news_list:
+        a = li.select_one('a')
+        title_tag = li.select_one('.txt_area .tit')
+        summary_tag = li.select_one('.txt_area .desc')
+        date_tag = li.select_one('.time_area span')
 
-            href = a_tag.get("href")
-            title_tag = li.select_one(".txt_area .tit")
-            summary_tag = li.select_one(".txt_area .desc")
-            date_tag = li.select_one(".time_area span")
-
-            if not title_tag or not date_tag:
-                continue
-
-            title = title_tag.get_text(strip=True)
-            summary = summary_tag.get_text(strip=True) if summary_tag else ''
-            raw_date = date_tag.get_text(strip=True).replace('.', '-')
-            date_full = f"{now.year}-{raw_date}"
-
-            try:
-                article_date = datetime.strptime(date_full, "%Y-%m-%d")
-            except ValueError:
-                continue
-
-            article_date = tz.localize(article_date)
-
-            if article_date.date() >= cutoff.date():
-                articles.append({
-                    "title": title,
-                    "summary": summary,
-                    "link": href if href.startswith("http") else f"https://www.mk.co.kr{href}",
-                    "date": article_date.strftime("%Y-%m-%d")
-                })
-        except Exception as e:
-            print("Error parsing article:", e)
+        if not (a and title_tag and date_tag):
             continue
+
+        title = title_tag.get_text(strip=True)
+        summary = summary_tag.get_text(strip=True) if summary_tag else ''
+        link = a['href'] if a['href'].startswith('http') else BASE_URL + a['href']
+        date_str = date_tag.get_text(strip=True)
+
+        try:
+            parsed_date = datetime.strptime(f"{now.year}.{date_str}", '%Y.%m.%d').date()
+        except Exception as e:
+            print(f"[오류] 날짜 파싱 실패: {date_str}, 오류: {e}")
+            continue
+
+        if parsed_date not in (today, yesterday):
+            continue
+
+        articles.append({
+            'title': title,
+            'summary': summary,
+            'link': link,
+            'date': parsed_date.strftime('%Y-%m-%d')
+        })
 
     return articles
 
 def send_email(articles):
-    SMTP_USER = os.environ.get("SMTP_USER")
-    SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
-    RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL")
-
-    if not all([SMTP_USER, SMTP_PASSWORD, RECIPIENT_EMAIL]):
-        print("❌ Missing email credentials.")
-        return
-
     if not articles:
         print("No new articles today.")
         return
 
     tz = pytz.timezone('Asia/Seoul')
-    today_str = datetime.now(tz).strftime("%Y년 %m월 %d일")
+    today_str = datetime.now(tz).strftime('%Y년 %m월 %d일')
 
-    html = f"<html><body><h1>[{today_str}] 신규 미라클AI 기사</h1>"
+    html = f"<html><body><h2>[{today_str}] 신규 미라클AI 기사</h2>"
     for a in articles:
-        html += f'<div style="margin-bottom:25px;">'
-        html += f'<h2><a href="{a["link"]}">{a["title"]}</a></h2>'
-        html += f'<p>{a["summary"]}</p>'
-        html += f'<small>발행일: {a["date"]}</small>'
-        html += "</div>"
+        html += f"<h3><a href='{a['link']}'>{a['title']}</a></h3>"
+        html += f"<p>{a['summary']}</p>"
+        html += f"<small>{a['date']}</small><hr>"
     html += "</body></html>"
 
     msg = MIMEMultipart('alternative')
@@ -100,13 +94,13 @@ def send_email(articles):
     msg.attach(MIMEText(html, 'html'))
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.send_message(msg)
-        print("✅ Email sent.")
+        print("✅ Email sent successfully.")
     except Exception as e:
         print("❌ Email send error:", e)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     articles = crawl_mirakleai()
     send_email(articles)
