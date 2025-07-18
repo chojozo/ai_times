@@ -43,8 +43,47 @@ def crawl_aitimes():
         
             for i, li_item in enumerate(li_elements):
 
-            print(f"\n[li 블록 #{i+1} 분석 시작]")
+                print(f"\n[li 블록 #{i+1} 분석 시작]")
 
+                date_tag = li_item.select_one('div.altlist-info-item:last-child')
+                if not date_tag:
+                    print("  -> 날짜 태그를 찾지 못했습니다. (건너뜀)")
+                    continue
+        
+                date_str = date_tag.get_text(strip=True)
+                print(f"  -> 추출된 날짜 문자열: '{date_str}'")
+        
+                try:
+                    article_date_naive = datetime.strptime(f"{now.year}-{date_str}", '%Y-%m-%d %H:%M')
+                    article_date = kst.localize(article_date_naive)
+        
+                    if article_date > now and (now.month == 1 and article_date.month == 12):
+                        article_date = article_date.replace(year=now.year - 1)
+        
+                    print(f"  -> 파싱된 날짜 객체: {article_date}")
+        
+                    if article_date > one_day_ago:
+                        print("  -> 결과: [포함] 24시간 이내의 새 기사입니다.")
+                        title_tag = li_item.select_one('h2.altlist-subject a')
+                        lead_tag = li_item.select_one('p.altlist-summary')
+        
+                        if title_tag and lead_tag:
+                            link_raw = title_tag['href']
+                            link = link_raw if link_raw.startswith('http') else 'https://www.aitimes.com' + link_raw
+        
+                            articles.append({
+                                'title': title_tag.get_text(strip=True),
+                                'link': link,
+                                'summary': lead_tag.get_text(strip=True),
+                                'date': article_date.strftime('%Y-%m-%d %H:%M')
+                            })
+                    else:
+                        print("  -> 결과: [제외] 오래된 기사입니다.")
+                except ValueError:
+                    print(f"  -> 날짜 파싱 실패: '{date_str}'")
+                    continue            
+            
+            
             # 날짜 태그 선택자 수정
             date_tag = li_item.select_one('div.altlist-info-item:last-child')
             if not date_tag:
