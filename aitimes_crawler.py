@@ -32,11 +32,17 @@ def crawl_aitimes():
         kst = pytz.timezone('Asia/Seoul')
         now = datetime.now(kst)
         one_day_ago = now - timedelta(days=1)
-        print(f"현재 시간 (KST): {now.strftime('%Y-%m-%d %H:%M')}")
-        print(f"필터링 기준 시간 (24시간 전): {one_day_ago.strftime('%Y-%m-%d %H:%M')}")
-        print("---------------------")
+        
+        for page in range(1, 3):  # ✅ 1페이지, 2페이지만 순회
+            response = requests.get(URL, params={'view_type': 'sm', 'page': page})
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            li_elements = soup.select('ul.altlist-webzine > li.altlist-webzine-item')
+        
+            print(f"\n== {page}페이지: {len(li_elements)}개의 기사 블록 탐색 ==")
+        
+            for i, li_item in enumerate(li_elements):
 
-        for i, li_item in enumerate(all_li_elements):
             print(f"\n[li 블록 #{i+1} 분석 시작]")
 
             # 날짜 태그 선택자 수정
