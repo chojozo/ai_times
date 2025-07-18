@@ -1,74 +1,73 @@
 # -*- coding: utf-8 -*-
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
-import pytz
-import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from datetime import datetime, timedelta, date
+import pytz
+import os
 
-# 이메일 정보 (환경변수에서 가져옴)
-SMTP_USER = os.environ.get("SMTP_USER")
-SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
-RECIPIENT_EMAIL = os.environ.get("RECIPIENT_EMAIL")
+# 환경 변수
+SMTP_USER = os.environ.get('SMTP_USER')
+SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD')
+RECIPIENT_EMAIL = os.environ.get('RECIPIENT_EMAIL')
 
 BASE_URL = 'https://www.mk.co.kr/mirakleai'
+URL = BASE_URL
 
 def crawl_mirakleai():
     tz = pytz.timezone('Asia/Seoul')
-    now = datetime.now(tz)
-    today = now.date()
+    today = datetime.now(tz).date()
     yesterday = today - timedelta(days=1)
 
     headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept-Language": "ko,en-US;q=0.7,en;q=0.3",
-        "Referer": BASE_URL
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0 Safari/537.36",
+        "Referer": BASE_URL,
     }
 
     session = requests.Session()
     session.headers.update(headers)
-
-    try:
-        resp = session.get(BASE_URL, timeout=10)
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"❌ 페이지 요청 실패: {e}")
-        return []
+    resp = session.get(URL, timeout=10)
+    resp.raise_for_status()
 
     soup = BeautifulSoup(resp.text, 'html.parser')
     articles = []
 
-    for li in soup.select('.latest_news_list > li.news_node')[:20]:
-        a_tag = li.select_one('a')
-        title_tag = li.select_one('.txt_area .tit')
-        summary_tag = li.select_one('.txt_area .desc')
+    for li in soup.select('.latest_news_wrap li.news_node'):
+        a = li.select_one('a.news_item')
+        title_tag = li.select_one('.news_ttl')
+        desc_tag = li.select_one('.news_desc')
         date_tag = li.select_one('.time_area span')
 
-        if not all([a_tag, title_tag, date_tag]):
+        if not (a and title_tag and date_tag):
             continue
 
-        title = title_tag.get_text(strip=True)
-        link = a_tag['href'] if a_tag['href'].startswith('http') else BASE_URL + a_tag['href']
-        summary = summary_tag.get_text(strip=True) if summary_tag else ''
-        date_str = date_tag.get_text(strip=True)  # 예: "07.18"
+        # 날짜 파싱: ['07.18', '2025']
+        parts = list(date_tag.stripped_strings)
+        if len(parts) != 2:
+            continue
 
+        month_day, year = parts
         try:
-            month, day = map(int, date_str.split('.'))
-            parsed_date = datetime(now.year, month, day).date()
-        except Exception as e:
-            print(f"[오류] 날짜 파싱 실패: {date_str}, 오류: {e}")
+            date_str = f"{year}-{month_day.replace('.', '-')}"
+            pub_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError as e:
+            print(f"[날짜 파싱 실패]: {date_str}, 오류: {e}")
             continue
 
-        if parsed_date not in (today, yesterday):
+        if pub_date not in [today, yesterday]:
             continue
+
+        link = a['href'] if a['href'].startswith('http') else 'https://www.mk.co.kr' + a['href']
+        title = title_tag.get_text(strip=True)
+        summary = desc_tag.get_text(strip=True) if desc_tag else ""
 
         articles.append({
             'title': title,
             'link': link,
             'summary': summary,
-            'date': parsed_date.strftime('%Y-%m-%d')
+            'date': str(pub_date)
         })
 
     return articles
@@ -81,10 +80,10 @@ def send_email(articles):
     tz = pytz.timezone('Asia/Seoul')
     today_str = datetime.now(tz).strftime('%Y년 %m월 %d일')
 
-    html = f"<html><body><h1>[{today_str}] 신규 미라클AI 기사</h1>"
+    html = f"<html><body><h2>[{today_str}] 신규 미라클AI 기사</h2>"
     for a in articles:
-        html += f'<h2><a href="{a["link"]}">{a["title"]}</a></h2>'
-        html += f'<p>{a["summary"]}</p><small>{a["date"]}</small><hr>'
+        html += f'<h3><a href="{a["link"]}">{a["title"]}</a></h3>'
+        html += f'<p>{a["summary"]}</p><p><small>{a["date"]}</small></p><hr>'
     html += "</body></html>"
 
     msg = MIMEMultipart('alternative')
